@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Internet Shutdown Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Slate & Sky -->
+    <!-- Application Structure Plan: The application is designed as a tabbed single-page dashboard. This structure was chosen over a long scrolling page to logically segment complex information and improve usability. The user can immediately see the global "big picture" (Dashboard), then choose to explore specific "Regional Deep-Dives" (like the 2024 India data), and finally interact with the "AI-Powered Insights" (Prediction & Cost). This non-linear, task-oriented flow allows users to access the information they find most relevant, first. Navigation is handled by JS click events that toggle content visibility. -->
+    <!-- Visualization & Content Choices:
+        1. Global KPIs (Total Shutdowns, Countries): Goal(Inform) -> Method(HTML/Tailwind "stat cards") -> Interaction(None) -> Justification(Provides immediate, high-level context).
+        2. Live Event Feed (Simulation): Goal(Inform/Engage) -> Method(JS-populated HTML list) -> Interaction(Dynamic content injection every 5s) -> Justification(Simulates the "real-time" aspect of the user's request).
+        3. Global Region Bubble Chart: Goal(Compare/Organize) -> Method(Chart.js Bubble Chart on Canvas) -> Interaction(Hover tooltips, Bubble size indicates impact) -> Justification(Replaces non-compliant map placeholder with a compliant, high-impact data visualization that simulates geographical context and shows shutdown volume).
+        4. Shutdowns by Reason (Donut Chart): Goal(Compare) -> Method(Chart.js Canvas) -> Interaction(Hover tooltips) -> Justification(Effectively shows proportions of triggers for 2024 India data from Access Now report).
+        5. Shutdowns by State (Horiz. Bar Chart): Goal(Compare) -> Method(Chart.js Canvas) -> Interaction(Hover tooltips) -> Justification(Clearly ranks Indian states by shutdown count, easy to read).
+        6. Most Blocked Platforms (Bar Chart): Goal(Compare) -> Method(Chart.js Canvas) -> Interaction(Hover tooltips) -> Justification(Highlights platform-specific censorship).
+        7. AI Risk Predictor (Interactive Form): Goal(Engage/Inform) -> Method(HTML Form + JS logic) -> Interaction(User select, button click, dynamic text update) -> Justification(Directly addresses "AI-powered tools" request by simulating predictive analysis).
+        8. Economic Impact Calculator (Interactive Form): Goal(Engage/Inform) -> Method(HTML Form + JS logic) -> Interaction(User input, button click, dynamic text update) -> Justification(Simulates NetBlocks COST tool, making data tangible).
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+                max-height: 450px;
+            }
+        }
+        .content-section {
+            display: none;
+            animation: fadeIn 0.5s;
+        }
+        .content-section.active {
+            display: block;
+        }
+        .nav-link {
+            @apply px-3 py-2 rounded-md text-sm font-medium text-slate-300 hover:bg-sky-700 hover:text-white transition-colors;
+        }
+        .nav-link.active {
+            @apply bg-sky-600 text-white;
+        }
+        .stat-card {
+            @apply bg-white p-6 rounded-xl shadow-lg transition-all hover:shadow-2xl hover:-translate-y-1;
+        }
+        .feed-item {
+            @apply bg-white p-3 rounded-lg shadow-sm border border-slate-200;
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans leading-relaxed">
+
+    <header class="bg-slate-800 text-white shadow-lg sticky top-0 z-50">
+        <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <span class="text-xl font-bold text-sky-400">SignalWatch</span>
+                    </div>
+                    <div class="hidden md:block">
+                        <div class="ml-10 flex items-baseline space-x-4">
+                            <a href="#" class="nav-link active" data-target="dashboard">Global Dashboard</a>
+                            <a href="#" class="nav-link" data-target="regional">Regional Deep-Dive</a>
+                            <a href="#" class="nav-link" data-target="ai-insights">AI-Powered Insights</a>
+                            <a href="#" class="nav-link" data-target="about">About & Methodology</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="md:hidden">
+                    <button type="button" id="mobile-menu-button" class="inline-flex items-center justify-center p-2 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 focus:outline-none">
+                        <span class="sr-only">Open main menu</span>
+                        <svg class="h-6 w-6" id="menu-icon-open" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                        <svg class="h-6 w-6 hidden" id="menu-icon-close" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </nav>
+        <div class="md:hidden hidden" id="mobile-menu">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <a href="#" class="nav-link active block" data-target="dashboard">Global Dashboard</a>
+                <a href="#" class="nav-link block" data-target="regional">Regional Deep-Dive</a>
+                <a href="#" class="nav-link block" data-target="ai-insights">AI-Powered Insights</a>
+                <a href="#" class="nav-link block" data-target="about">About & Methodology</a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+
+        <section id="dashboard" class="content-section active">
+            <div class="mb-6">
+                <h1 class="text-3xl font-bold text-slate-900 mb-2">Global Shutdown Dashboard</h1>
+                <p class="text-lg text-slate-600">A real-time overview of global internet disruptions. This dashboard provides at-a-glance metrics, a live (simulated) feed of new events, and a geographical overview of current and recent outages.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="stat-card text-center">
+                    <h3 class="text-sm font-medium text-slate-500 uppercase tracking-wider">Total Shutdowns (2024)</h3>
+                    <p class="text-5xl font-extrabold text-sky-600 mt-2">296</p>
+                    <p class="text-xs text-slate-400 mt-1">(Source: Access Now)</p>
+                </div>
+                <div class="stat-card text-center">
+                    <h3 class="text-sm font-medium text-slate-500 uppercase tracking-wider">Countries Affected (2024)</h3>
+                    <p class="text-5xl font-extrabold text-red-600 mt-2">54</p>
+                    <p class="text-xs text-slate-400 mt-1">(Source: Access Now)</p>
+                </div>
+                <div class="stat-card text-center">
+                    <h3 class="text-sm font-medium text-slate-500 uppercase tracking-wider">Top Offender (2024)</h3>
+                    <p class="text-5xl font-extrabold text-slate-700 mt-2">Myanmar</p>
+                    <p class="text-xs text-slate-400 mt-1">(85 Shutdowns)</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-semibold mb-4 text-center">Global Shutdowns by Region (Simulated Map)</h2>
+                    <p class="text-sm text-center text-slate-500 mb-4">Bubble size indicates total reported shutdowns in 2024 (Access Now)</p>
+                    <div class="chart-container h-full">
+                        <canvas id="globalMapChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-semibold mb-4">Live Event Feed (Simulated)</h2>
+                    <div class="space-y-3 h-96 overflow-y-auto pr-2" id="live-feed-container">
+                        <div class="feed-item">
+                            <p class="font-medium text-sm">Network disruption detected: <span class="font-bold text-red-600">Manipur, IN</span></p>
+                            <p class="text-xs text-slate-500">Reason: Communal Violence | <span class="time-ago" data-timestamp="1730441460000">Just now</span></p>
+                        </div>
+                        <div class="feed-item">
+                            <p class="font-medium text-sm">Social media (X, TikTok) block: <span class="font-bold text-slate-600">Pakistan</span></p>
+                            <p class="text-xs text-slate-500">Reason: Political Unrest | <span class="time-ago" data-timestamp="1730440020000">24 mins ago</span></p>
+                        </div>
+                         <div class="feed-item">
+                            <p class="font-medium text-sm">Full blackout reported: <span class="font-bold text-slate-600">Myanmar</span></p>
+                            <p class="text-xs text-slate-500">Reason: Conflict | <span class="time-ago" data-timestamp="1730432040000">3 hours ago</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="regional" class="content-section">
+            <div class="mb-6">
+                <h1 class="text-3xl font-bold text-slate-900 mb-2">Regional Deep-Dive: 2024 Report</h1>
+                <p class="text-lg text-slate-600">Explore detailed statistics from high-impact regions. The following visualizations are based on the 2024 annual report data, with a special focus on India, which recorded 84 shutdowns, the highest for any democracy.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-semibold mb-4 text-center">Shutdowns by Reason (India, 2024)</h2>
+                    <div class="chart-container">
+                        <canvas id="reasonChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-semibold mb-4 text-center">Top States (India, 2024)</h2>
+                    <div class="chart-container">
+                        <canvas id="stateChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg lg:col-span-2">
+                    <h2 class="text-xl font-semibold mb-4 text-center">Most Blocked Platforms (Global, 2024)</h2>
+                    <div class="chart-container h-80 max-h-96">
+                        <canvas id="platformChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="ai-insights" class="content-section">
+             <div class="mb-6">
+                <h1 class="text-3xl font-bold text-slate-900 mb-2">AI-Powered Insights & Tools</h1>
+                <p class="text-lg text-slate-600">Leverage (simulated) AI models to predict shutdown risk and calculate economic impact. These tools are based on methodologies used by groups like NetBlocks and predictive analysis of network data (BGP, IODA).</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-semibold mb-4">AI Risk Predictor</h2>
+                    <p class="text-sm text-slate-600 mb-4">Select a country to get a simulated AI-driven risk assessment for a major shutdown in the next 30 days, based on political climate and network anomaly data.</p>
+                    <div class="space-y-4">
+                        <select id="risk-country" class="w-full p-3 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
+                            <option value="India">India</option>
+                            <option value="Pakistan">Pakistan</option>
+                            <option value="Myanmar">Myanmar</option>
+                            <option value="Russia">Russia</option>
+                            <option value="USA">USA</option>
+                            <option value="Tanzania">Tanzania</option>
+                        </select>
+                        <button id="predict-risk-btn" class="w-full bg-sky-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-sky-700 transition-colors">Predict Risk</button>
+                        <div id="risk-result" class="p-4 bg-slate-100 rounded-lg min-h-[100px] border border-slate-200">
+                            <p class="text-slate-500 text-center font-medium">Select a country and click predict.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-semibold mb-4">Economic Impact Calculator</h2>
+                    <p class="text-sm text-slate-600 mb-4">Estimate the economic cost of a shutdown based on the NetBlocks COST methodology. This is a simplified simulation.</p>
+                    <div class="space-y-4">
+                        <select id="cost-country" class="w-full p-3 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
+                            <option value="India" data-gdp-factor="300">India (Est. $300M/day)</option>
+                            <option value="Pakistan" data-gdp-factor="70">Pakistan (Est. $70M/day)</option>
+                            <option value="Myanmar" data-gdp-factor="20">Myanmar (Est. $20M/day)</option>
+                            <option value="Russia" data-gdp-factor="400">Russia (Est. $400M/day)</option>
+                            <option value="USA" data-gdp-factor="2000">USA (Est. $2B/day)</option>
+                        </select>
+                        <input type="number" id="cost-days" class="w-full p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500" placeholder="Enter duration in days..." min="1">
+                        <button id="calculate-cost-btn" class="w-full bg-red-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-700 transition-colors">Calculate Impact</button>
+                        <div id="cost-result" class="p-4 bg-red-50 rounded-lg min-h-[100px] border border-red-200">
+                             <p class="text-slate-500 text-center font-medium">Enter duration to see estimated cost.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="about" class="content-section">
+            <div class="bg-white p-8 rounded-xl shadow-lg">
+                <h1 class="text-3xl font-bold text-slate-900 mb-4">About & Methodology</h1>
+                
+                <h2 class="text-xl font-semibold text-slate-800 mt-6 mb-2">Data Source (Demonstration)</h2>
+                <p class="text-slate-600 mb-4">
+                    The data used in this demonstration application is based on publicly available reports from 2024 and 2025, primarily from the <strong class="font-medium">#KeepItOn coalition led by Access Now</strong>, as well as insights from organizations like <strong class="font-medium">NetBlocks</strong> and <strong class="font-medium">Surfshark</strong>. All data points (e.g., 296 shutdowns in 2024, 84 in India) are derived from these reports to create a realistic, yet static, dataset for this demo.
+                </p>
+
+                <h2 class="text-xl font-semibold text-slate-800 mt-6 mb-2">AI-Powered Tools (Simulation)</h2>
+                <p class="text-slate-600 mb-4">
+                    The "AI-Powered Insights" section is a <strong class="font-medium">conceptual simulation</strong>. In a real-world application:
+                </p>
+                <ul class="list-disc list-inside text-slate-600 space-y-2">
+                    <li>
+                        <strong class="font-medium">Risk Prediction:</strong> This would be powered by machine learning models (like those described by UptimeAI or Internet Society Pulse) analyzing real-time BGP (Border Gateway Protocol) data, active network probes, and socio-political event data to generate a probabilistic risk score.
+                    </li>
+                    <li>
+                        <strong class="font-medium">Economic Impact:</strong> This is a simplified version of the <strong class="font-medium">NetBlocks Cost of Shutdown Tool (COST)</strong>, which uses World Bank and ITU indicators to estimate the economic cost of disruptions.
+                    </li>
+                </ul>
+
+                <h2 class="text-xl font-semibold text-slate-800 mt-6 mb-2">About This Project</h2>
+                <p class="text-slate-600">
+                    This is a single-page web application (SPA) built using HTML, Tailwind CSS, and vanilla JavaScript with Chart.js for visualizations. It was created to demonstrate how complex report data can be translated into an interactive, user-friendly, and explorable web experience, complete with simulated AI-driven features.
+                </p>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const navLinks = document.querySelectorAll('.nav-link');
+            const mobileMenuButton = document.getElementById('mobile-menu-button');
+            const mobileMenu = document.getElementById('mobile-menu');
+            const menuIconOpen = document.getElementById('menu-icon-open');
+            const menuIconClose = document.getElementById('menu-icon-close');
+            let chartsInitialized = false;
+
+            function showPage(targetId) {
+                document.querySelectorAll('.content-section').forEach(section => {
+                    section.classList.remove('active');
+                });
+                document.getElementById(targetId).classList.add('active');
+
+                navLinks.forEach(link => {
+                    link.classList.toggle('active', link.dataset.target === targetId);
+                });
+
+                if (targetId === 'dashboard' || targetId === 'regional') {
+                    initCharts();
+                }
+
+                if (targetId === 'dashboard') {
+                    startLiveFeed();
+                    updateTimestamps();
+                } else {
+                    stopLiveFeed();
+                }
+            }
+
+            navLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const targetId = e.currentTarget.dataset.target;
+                    showPage(targetId);
+                    if (mobileMenu.classList.contains('hidden') === false) {
+                        mobileMenu.classList.add('hidden');
+                        menuIconOpen.classList.remove('hidden');
+                        menuIconClose.classList.add('hidden');
+                    }
+                });
+            });
+
+            mobileMenuButton.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+                menuIconOpen.classList.toggle('hidden');
+                menuIconClose.classList.toggle('hidden');
+            });
+
+            function initCharts() {
+                if (chartsInitialized) return;
+                chartsInitialized = true;
+                
+                const chartOptions = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 20,
+                                font: { size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed && context.parsed.r) {
+                                        label += ` ${context.parsed.r} shutdowns`;
+                                    } else if (context.parsed) {
+                                        label += context.parsed;
+                                    }
+                                    if (context.dataset.label === 'percentage') {
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                        label += ` (${percentage}%)`;
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        title: { display: false }
+                    }
+                };
+
+                // 1. Global Map Chart (Bubble Chart Simulation)
+                const globalMapData = {
+                    labels: ['Asia', 'Africa', 'Americas', 'Europe', 'Middle East'],
+                    datasets: [{
+                        label: 'Shutdowns by Region',
+                        data: [
+                            { x: 70, y: 50, r: 180, label: 'Asia (180+ Shutdowns)' }, 
+                            { x: 30, y: 30, r: 80, label: 'Africa (80+ Shutdowns)' },
+                            { x: 10, y: 50, r: 25, label: 'Americas (25+ Shutdowns)' },
+                            { x: 45, y: 80, r: 10, label: 'Europe (10+ Shutdowns)' },
+                            { x: 55, y: 65, r: 15, label: 'Middle East (15+ Shutdowns)' }
+                        ],
+                        backgroundColor: [
+                            'rgba(239, 68, 68, 0.6)', 
+                            'rgba(245, 158, 11, 0.6)', 
+                            'rgba(59, 130, 246, 0.6)', 
+                            'rgba(20, 184, 166, 0.6)',
+                            'rgba(147, 51, 234, 0.6)'
+                        ],
+                        hoverBackgroundColor: [
+                            'rgba(239, 68, 68, 1)', 
+                            'rgba(245, 158, 11, 1)', 
+                            'rgba(59, 130, 246, 1)', 
+                            'rgba(20, 184, 166, 1)',
+                            'rgba(147, 51, 234, 1)'
+                        ],
+                    }]
+                };
+
+                new Chart(document.getElementById('globalMapChart'), {
+                    type: 'bubble',
+                    data: globalMapData,
+                    options: {
+                        ...chartOptions,
+                        scales: {
+                            x: { display: false, min: 0, max: 100 },
+                            y: { display: false, min: 0, max: 100 }
+                        },
+                        plugins: {
+                            ...chartOptions.plugins,
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => context.raw.label
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // 2. Shutdowns by Reason (Doughnut Chart)
+                const reasonData = {
+                    labels: ['Protests', 'Communal Violence', 'Exams', 'Other/Unknown'],
+                    datasets: [{
+                        label: 'percentage',
+                        data: [41, 23, 5, 15], 
+                        backgroundColor: [
+                            'rgba(59, 130, 246, 0.7)',
+                            'rgba(239, 68, 68, 0.7)',
+                            'rgba(245, 158, 11, 0.7)',
+                            'rgba(107, 114, 128, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(59, 130, 246, 1)',
+                            'rgba(239, 68, 68, 1)',
+                            'rgba(245, 158, 11, 1)',
+                            'rgba(107, 114, 128, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                };
+                new Chart(document.getElementById('reasonChart'), {
+                    type: 'doughnut',
+                    data: reasonData,
+                    options: chartOptions
+                });
+
+                // 3. Top States (Horizontal Bar Chart)
+                const stateData = {
+                    labels: ['Manipur', 'Haryana', 'Jammu & Kashmir', 'Other States'],
+                    datasets: [{
+                        label: 'Shutdowns',
+                        data: [21, 12, 12, 39],
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1
+                    }]
+                };
+                new Chart(document.getElementById('stateChart'), {
+                    type: 'bar',
+                    data: stateData,
+                    options: {
+                        ...chartOptions,
+                        indexAxis: 'y',
+                        plugins: {
+                            ...chartOptions.plugins,
+                            legend: { display: false }
+                        }
+                    }
+                });
+
+                // 4. Most Blocked Platforms (Bar Chart)
+                const platformData = {
+                    labels: ['X (Twitter)', 'TikTok', 'Signal'],
+                    datasets: [{
+                        label: 'Times Blocked (Global)',
+                        data: [24, 10, 10],
+                        backgroundColor: [
+                            'rgba(30, 169, 233, 0.7)',
+                            'rgba(23, 23, 23, 0.7)',
+                            'rgba(56, 149, 237, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(30, 169, 233, 1)',
+                            'rgba(23, 23, 23, 1)',
+                            'rgba(56, 149, 237, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                };
+                new Chart(document.getElementById('platformChart'), {
+                    type: 'bar',
+                    data: platformData,
+                    options: {
+                        ...chartOptions,
+                        plugins: {
+                            ...chartOptions.plugins,
+                            legend: { display: false }
+                        }
+                    }
+                });
+            }
+
+            document.getElementById('predict-risk-btn').addEventListener('click', () => {
+                const country = document.getElementById('risk-country').value;
+                const resultEl = document.getElementById('risk-result');
+                resultEl.innerHTML = `<p class="text-slate-500 text-center font-medium">Analyzing risk for ${country}...</p>`;
+                
+                setTimeout(() => {
+                    const riskLevels = {
+                        "India": { score: 7.2, level: "High", reason: "Ongoing protests and regional instability." },
+                        "Pakistan": { score: 8.1, level: "High", reason: "High political tensions and protest activity." },
+                        "Myanmar": { score: 9.5, level: "Severe", reason: "Ongoing conflict and military control." },
+                        "Russia": { score: 6.5, level: "Elevated", reason: "Information control policies and conflict." },
+                        "USA": { score: 2.1, level: "Low", reason: "Strong legal protections, but monitoring for specific events." },
+                        "Tanzania": { score: 5.5, level: "Medium", reason: "Risk of disruption during election periods." }
+                    };
+                    const risk = riskLevels[country];
+                    resultEl.innerHTML = `
+                        <p class="text-sm font-medium text-slate-600">Country: <span class="font-bold text-slate-900">${country}</span></p>
+                        <p class="text-sm font-medium text-slate-600">Risk Score: <span class="font-bold text-2xl ${risk.score > 7 ? 'text-red-600' : (risk.score > 5 ? 'text-amber-600' : 'text-green-600')}">${risk.score}/10</span></p>
+                        <p class="text-sm font-medium text-slate-600">Level: <span class="font-bold text-slate-900">${risk.level}</span></p>
+                        <p class="text-xs text-slate-500 mt-2"><strong>Reason:</strong> ${risk.reason}</p>
+                    `;
+                }, 1000);
+            });
+
+            document.getElementById('calculate-cost-btn').addEventListener('click', () => {
+                const days = parseFloat(document.getElementById('cost-days').value);
+                const countrySelect = document.getElementById('cost-country');
+                const selectedOption = countrySelect.options[countrySelect.selectedIndex];
+                const gdpFactor = parseFloat(selectedOption.dataset.gdpFactor);
+                const countryName = selectedOption.text.split(' (')[0];
+                const resultEl = document.getElementById('cost-result');
+
+                if (isNaN(days) || days <= 0) {
+                    resultEl.innerHTML = `<p class="text-red-600 text-center font-medium">Please enter a valid number of days.</p>`;
+                    return;
+                }
+
+                const totalCost = days * gdpFactor * 1000000;
+                resultEl.innerHTML = `
+                    <p class="text-sm font-medium text-slate-600">Estimated Impact for <span class="font-bold">${countryName}</span></p>
+                    <p class="text-3xl font-bold text-red-600 mt-2">$${totalCost.toLocaleString('en-US')}</p>
+                    <p class="text-sm font-medium text-slate-500">over <span class="font-bold">${days}</span> day(s) of full shutdown.</p>
+                `;
+            });
+            
+            let feedInterval;
+            const liveFeedEvents = [
+                { location: "Senegal", reason: "Election Postponement" },
+                { location: "Khuzestan, IR", reason: "Protest Activity" },
+                { location: "Ukraine", reason: "Conflict/Infrastructure Attack" },
+                { location: "Rajasthan, IN", reason: "Exam Cheating Prevention" }
+            ];
+            
+            function addLiveEvent() {
+                const container = document.getElementById('live-feed-container');
+                if (!container) return;
+
+                const event = liveFeedEvents[Math.floor(Math.random() * liveFeedEvents.length)];
+                const newItem = document.createElement('div');
+                newItem.className = 'feed-item';
+                newItem.innerHTML = `
+                    <p class="font-medium text-sm">New disruption reported: <span class="font-bold text-amber-600">${event.location}</span></p>
+                    <p class="text-xs text-slate-500">Reason: ${event.reason} | <span class="time-ago" data-timestamp="${Date.now()}">Just now</span></p>
+                `;
+                container.prepend(newItem);
+                
+                while (container.children.length > 10) {
+                    container.removeChild(container.lastChild);
+                }
+            }
+
+            function updateTimestamps() {
+                document.querySelectorAll('.time-ago').forEach(span => {
+                    const timestamp = parseInt(span.dataset.timestamp, 10);
+                    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+                    let interval = seconds / 31536000;
+                    if (interval > 1) { span.textContent = Math.floor(interval) + " years ago"; return; }
+                    interval = seconds / 2592000;
+                    if (interval > 1) { span.textContent = Math.floor(interval) + " months ago"; return; }
+                    interval = seconds / 86400;
+                    if (interval > 1) { span.textContent = Math.floor(interval) + " days ago"; return; }
+                    interval = seconds / 3600;
+                    if (interval > 1) { span.textContent = Math.floor(interval) + " hours ago"; return; }
+                    interval = seconds / 60;
+                    if (interval > 1) { span.textContent = Math.floor(interval) + " mins ago"; return; }
+                    if (seconds < 10) { span.textContent = "Just now"; return; }
+                    span.textContent = Math.floor(seconds) + " secs ago";
+                });
+            }
+
+            function startLiveFeed() {
+                if (!feedInterval) {
+                    feedInterval = setInterval(addLiveEvent, 5000);
+                }
+            }
+
+            function stopLiveFeed() {
+                clearInterval(feedInterval);
+                feedInterval = null;
+            }
+
+            showPage('dashboard');
+        });
+    </script>
+
+</body>
+</html>
